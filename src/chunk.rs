@@ -99,10 +99,10 @@ impl ChunkIndex {
         };
         (-1..=1)
             .cartesian_product(-1..=1)
-            .filter(|(x, y)| (*x != 0) || (*y != 0))
-            .map(move |(x_delta, y_delta)| {
+            .filter(|(delta_x, delta_y)| (*delta_x != 0) || (*delta_y != 0))
+            .map(move |(delta_x, delta_y)| {
                 let (x, y) = base_idx;
-                (x + x_delta, y + y_delta)
+                (x + delta_x, y + delta_y)
             })
             .filter(|(x, y)| {
                 (0..ChunkIndex::X_RADIUS as i32 * 2).contains(x)
@@ -119,21 +119,55 @@ impl ChunkIndex {
         };
         (-1..=1)
             .cartesian_product(-1..=1)
-            .map(|(x, y)| ((x, y), (x as f32, y as f32)))
-            .map(move |(idx, (x, y))| {
+            .map(|(delta_x, delta_y)| ((delta_x, delta_y), (delta_x as f32, delta_y as f32)))
+            .map(move |(delta_idx, (delta_x, delta_y))| {
                 (
-                    idx,
+                    delta_idx,
                     Vec2 {
-                        x: chunk_pos.x + x * radius,
-                        y: chunk_pos.y + y * radius,
+                        x: chunk_pos.x + delta_x * radius,
+                        y: chunk_pos.y + delta_y * radius,
                     },
                 )
             })
-            .filter(|(_, Vec2 { x, y })| {
-                !(0.0..Chunk::CHUNK_SIZE).contains(x) || !(0.0..Chunk::CHUNK_SIZE).contains(y)
+            .filter(
+                |(
+                    _,
+                    Vec2 {
+                        x: chunk_x,
+                        y: chunk_y,
+                    },
+                )| {
+                    !(0.0..Chunk::CHUNK_SIZE).contains(chunk_x)
+                        || !(0.0..Chunk::CHUNK_SIZE).contains(chunk_y)
+                },
+            )
+            .map(|(delta_idx, _)| delta_idx)
+            .map(move |(delta_x, delta_y)| (base_idx.0 + delta_x, base_idx.1 + delta_y))
+            .filter(|(x, y)| {
+                (0..ChunkIndex::X_RADIUS as i32 * 2).contains(x)
+                    && (0..ChunkIndex::Y_RADIUS as i32 * 2).contains(y)
             })
-            .map(|(idx, _)| idx)
-            .map(move |(x, y)| (base_idx.0 + x, base_idx.1 + y))
+            .map(|(x, y)| (x as usize, y as usize))
+            .map(|(x, y)| &self.chunks[x][y])
+    }
+    pub fn get_near(&self, pos: Vec2, radius: f32) -> impl Iterator<Item = &Entity> {
+        let base_idx = {
+            let Vec2 { x, y } = ((pos + ChunkIndex::BOUND) / Chunk::CHUNK_SIZE).floor();
+            (x as i32, y as i32)
+        };
+        let min = pos - radius;
+        let max = pos + radius;
+        let min_idx = {
+            let Vec2 { x, y } = ((min + ChunkIndex::BOUND) / Chunk::CHUNK_SIZE).floor();
+            (x as i32, y as i32)
+        };
+        let max_idx = {
+            let Vec2 { x, y } = ((max + ChunkIndex::BOUND) / Chunk::CHUNK_SIZE).floor();
+            (x as i32, y as i32)
+        };
+        (min_idx.0..=max_idx.0)
+            .cartesian_product(min_idx.1..=max_idx.1)
+            .filter(move |(x, y)| *x != base_idx.0 || *y != base_idx.1)
             .filter(|(x, y)| {
                 (0..ChunkIndex::X_RADIUS as i32 * 2).contains(x)
                     && (0..ChunkIndex::Y_RADIUS as i32 * 2).contains(y)
