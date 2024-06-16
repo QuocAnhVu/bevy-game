@@ -1,7 +1,10 @@
-use std::{array, ops::Add};
+use std::{array, iter, ops::Add};
 
 use crate::{util::vec2, Agent, Next, Prev};
-use bevy::prelude::*;
+use bevy::{
+    math::bounding::{Aabb2d, IntersectsVolume, RayCast2d},
+    prelude::*,
+};
 use itertools::{Either, Itertools};
 
 pub struct ChunkPlugin;
@@ -105,6 +108,12 @@ impl ChunkIndex {
         let Vec2 { x, y } = ((pos + ChunkIndex::BOUND) / Chunk::CHUNK_SIZE).floor();
         ChunkIdx::new(x as i32, y as i32)
     }
+    fn idx2pos(idx: ChunkIdx) -> Vec2 {
+        Vec2 {
+            x: idx.x as f32 * Chunk::CHUNK_SIZE - ChunkIndex::BOUND.x,
+            y: idx.y as f32 * Chunk::CHUNK_SIZE - ChunkIndex::BOUND.y,
+        }
+    }
     pub fn get(&self, pos: Vec2) -> Option<Entity> {
         let idx = ChunkIndex::pos2idx(pos);
         if (0..ChunkIndex::X_RADIUS as i32 * 2).contains(&idx.x)
@@ -187,10 +196,34 @@ impl ChunkIndex {
             .map(|(x, y)| &self.chunks[x][y])
     }
     pub fn get_line(&self, origin_pos: Vec2, target_pos: Vec2) -> impl Iterator<Item = &Entity> {
-        let normal_origin_pos = (origin_pos + ChunkIndex::BOUND) / Chunk::CHUNK_SIZE;
-        let normal_target_pos = (target_pos + ChunkIndex::BOUND) / Chunk::CHUNK_SIZE;
         let origin_idx = ChunkIndex::pos2idx(origin_pos);
         let target_idx = ChunkIndex::pos2idx(target_pos);
+        // let idxs = (origin_idx.x..target_idx.x)
+        //     .cartesian_product(origin_idx.y..target_idx.y)
+        //     .map(|(x, y)| ChunkIdx::new(x, y))
+        //     .filter(|idx| {
+        //         (0..ChunkIndex::X_RADIUS as i32 * 2).contains(&idx.x)
+        //             && (0..ChunkIndex::Y_RADIUS as i32 * 2).contains(&idx.y)
+        //     });
+        // let aabb2ds = idxs
+        //     .clone()
+        //     .map(ChunkIndex::idx2pos)
+        //     .map(|pos| pos + Chunk::CHUNK_SIZE / 2.0)
+        //     .map(|pos| Aabb2d::new(pos, Vec2::splat(Chunk::CHUNK_SIZE / 2.0)));
+        // let (direction, length) = match Direction2d::new_and_length(target_pos - origin_pos) {
+        //     Ok(res) => res,
+        //     Err(_) => return Either::Right(iter::empty()),
+        // };
+        // let ray = RayCast2d::new(origin_pos, direction, length);
+        // let entities = idxs
+        //     .zip(aabb2ds)
+        //     .filter(move |(_, aab2d)| ray.intersects(aab2d))
+        //     .map(|(idx, _)| idx)
+        //     .map(|idx| (idx.x as usize, idx.y as usize))
+        //     .map(|(x, y)| &self.chunks[x][y]);
+        // Either::Left(entities)
+        let normal_origin_pos = (origin_pos + ChunkIndex::BOUND) / Chunk::CHUNK_SIZE;
+        let normal_target_pos = (target_pos + ChunkIndex::BOUND) / Chunk::CHUNK_SIZE;
         let idxs = if origin_idx.y == target_idx.y || origin_idx.x == target_idx.x {
             // Straight (axis-aligned) case
             // OR diagonal that does not cross either x or y
